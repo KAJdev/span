@@ -16,36 +16,30 @@ impl LogHub {
     pub fn new() -> Self { Self::default() }
 
     pub async fn start_subscribers(self: Arc<Self>, client: Client) {
+        // Establish subscriptions before returning to avoid race with early publishes
+        let mut sub_apps = match client.subscribe("span.apps.*.*.logs").await {
+            Ok(s) => { info!(subject = "span.apps.*.*.logs", "Subscribed to app logs"); s },
+            Err(e) => { warn!(error = %e, "Failed to subscribe to app logs"); return; }
+        };
         let apps = self.clone();
-        let builds = self.clone();
-
-        let client_apps = client.clone();
         tokio::spawn(async move {
-            match client_apps.subscribe("span.apps.*.*.logs").await {
-                Ok(mut sub) => {
-                    info!(subject = "span.apps.*.*.logs", "Subscribed to app logs");
-                    while let Some(msg) = sub.next().await {
-                        let subject = msg.subject.clone();
-                        let line = match String::from_utf8(msg.payload.to_vec()) { Ok(s) => s, Err(_) => continue };
-                        apps.append_and_broadcast(&subject, line).await;
-                    }
-                }
-                Err(e) => warn!(error = %e, "Failed to subscribe to app logs"),
+            while let Some(msg) = sub_apps.next().await {
+                let subject = msg.subject.clone();
+                let line = match String::from_utf8(msg.payload.to_vec()) { Ok(s) => s, Err(_) => continue };
+                apps.append_and_broadcast(&subject, line).await;
             }
         });
 
-        let client_builds = client.clone();
+        let mut sub_builds = match client.subscribe("span.builds.*.logs").await {
+            Ok(s) => { info!(subject = "span.builds.*.logs", "Subscribed to build logs"); s },
+            Err(e) => { warn!(error = %e, "Failed to subscribe to build logs"); return; }
+        };
+        let builds = self.clone();
         tokio::spawn(async move {
-            match client_builds.subscribe("span.builds.*.logs").await {
-                Ok(mut sub) => {
-                    info!(subject = "span.builds.*.logs", "Subscribed to build logs");
-                    while let Some(msg) = sub.next().await {
-                        let subject = msg.subject.clone();
-                        let line = match String::from_utf8(msg.payload.to_vec()) { Ok(s) => s, Err(_) => continue };
-                        builds.append_and_broadcast(&subject, line).await;
-                    }
-                }
-                Err(e) => warn!(error = %e, "Failed to subscribe to build logs"),
+            while let Some(msg) = sub_builds.next().await {
+                let subject = msg.subject.clone();
+                let line = match String::from_utf8(msg.payload.to_vec()) { Ok(s) => s, Err(_) => continue };
+                builds.append_and_broadcast(&subject, line).await;
             }
         });
     }
