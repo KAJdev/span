@@ -85,15 +85,18 @@ download_span() {
     fi
 
     echo "Downloading release artifacts..."
-    if [[ "${SPAN_VERSION}" == "latest" ]]; then
-        VERSION=$(curl -s https://api.github.com/repos/KAJdev/span/releases/latest | grep 'tag_name' | sed -E 's/.*"([^"]+)".*/\1/')
-    else
-        VERSION="${SPAN_VERSION}"
-    fi
     ARCH=$(uname -m)
     [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
     [[ "$ARCH" == "x86_64" ]] && ARCH=amd64
-    curl -L "https://github.com/KAJdev/span/releases/download/${VERSION}/span-${VERSION}-linux-${ARCH}.tar.gz" -o /tmp/span.tar.gz || {
+    if [[ "${SPAN_VERSION}" == "latest" ]]; then
+        VERSION_DIR="latest"
+        FILE_VERSION="latest"
+    else
+        VERSION_DIR="${SPAN_VERSION}"
+        FILE_VERSION="${SPAN_VERSION}"
+    fi
+    TARBALL="span-${FILE_VERSION}-linux-${ARCH}.tar.gz"
+    curl -L "https://github.com/KAJdev/span/releases/download/${VERSION_DIR}/${TARBALL}" -o /tmp/span.tar.gz || {
         echo "Failed to download release tarball"; exit 1; }
     tar -xzf /tmp/span.tar.gz -C "${INSTALL_DIR}"
     rm -f /tmp/span.tar.gz
