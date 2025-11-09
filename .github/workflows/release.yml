@@ -9,14 +9,16 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           - arch: amd64
             target: x86_64-unknown-linux-gnu
+            os: ubuntu-24.04
           - arch: arm64
             target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
