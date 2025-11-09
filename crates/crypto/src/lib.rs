@@ -86,11 +86,19 @@ mod tests {
         let node_id = "123e4567-e89b-12d3-a456-426614174000";
         let (cert_pem, _key) = generate_node_cert(node_id, &ca.ca).expect("node cert");
         // Parse PEM and extract DER using x509-parser's pem helper
-        let pem = x509_parser::pem::parse_x509_pem(cert_pem.as_bytes()).expect("pem");
-        let (_rem, parsed) = x509_parser::parse_x509_certificate(pem.contents()).expect("x509");
-        let san_opt = parsed.subject_alternative_name();
-        let san = san_opt.expect("san");
-        let names = san.value.general_names;
-        assert!(names.iter().any(|gn| matches!(gn, x509_parser::extensions::GeneralName::DNSName(d) if d.as_ref() == node_id)));
+        let (_rem, pem) = x509_parser::pem::parse_x509_pem(cert_pem.as_bytes()).expect("pem");
+        let (_rem, parsed) = x509_parser::parse_x509_certificate(&pem.contents).expect("x509");
+        if let Ok(Some(san_ext)) = parsed.subject_alternative_name() {
+            let names = &san_ext.value.general_names;
+            let has = names.iter().any(|gn| {
+                if let x509_parser::extensions::GeneralName::DNSName(dns) = gn {
+                    let s: &str = dns.as_ref();
+                    s == node_id
+                } else { false }
+            });
+            assert!(has);
+        } else {
+            panic!("san");
+        }
     }
 }
