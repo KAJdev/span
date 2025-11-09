@@ -26,7 +26,10 @@ pub async fn start() -> anyhow::Result<()> {
     run_migrations(&pool).await?;
     info!("Connected to database and ran migrations");
 
-    let state: SharedState = Arc::new(AppState { db: pool, version: VERSION });
+    let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "dev-secret".into());
+    let cluster_id = std::env::var("SPAN_CLUSTER_ID").unwrap_or_else(|_| uuid::Uuid::new_v4().to_string());
+
+    let state: SharedState = Arc::new(AppState { db: pool, version: VERSION, cluster_id, jwt_secret });
 
     let http_addr: SocketAddr = cfg.http_bind.parse()?;
     let grpc_addr: SocketAddr = cfg.grpc_bind.parse()?;

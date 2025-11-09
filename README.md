@@ -1,30 +1,63 @@
-# span
+# Span
 
-Distributed personal cloud control plane.
+Distributed personal cloud. Every node is equal.
 
-## Install
-
-- Ensure Rust 1.75+ is installed.
-- Install binaries:
+## One-line installation
 
 ```
-cargo install --path crates/cli
-cargo install --path crates/control-plane
+curl -sSL https://get.span.sh | sudo sh
 ```
 
-## Quick start
+This installs Span to /opt/span, prepares Docker and systemd, and sets up the unified stack.
+
+## Initialize
+
+- Bootstrap a new cluster on the first node:
 
 ```
-export DATABASE_URL="postgres://user:pass@localhost/span"
-span init --run
+sudo span init
+sudo systemctl start span
+sudo systemctl enable span
 ```
+
+- Join an existing cluster from another node:
+
+```
+sudo span init --join <node-ip>
+sudo systemctl start span
+sudo systemctl enable span
+```
+
+## Status
+
+```
+span status
+systemctl status span
+```
+
+## Access the Dashboard
+
+Open http://<node-ip>:3000 in your browser.
+
+## Development
+
+- Ensure Rust is installed.
+- Build locally:
+
+```
+cargo build --release
+```
+
+## Repository structure
+
+- crates/ — Rust crates (control-plane, agent, gateway, cli)
+- deploy/ — Docker Compose stack and Dockerfiles
+- dashboard/ — Minimal dashboard server
+- install.sh — Unified installer
+- uninstall.sh — Cleanup script
 
 ## Health check
 
 ```
 curl http://localhost:8080/health
-# {"status":"ok","version":"0.1.0"}
 ```
-
-## Repository structure
-See crates/ for components. Control Plane lives in `crates/control-plane`.

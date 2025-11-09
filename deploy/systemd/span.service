@@ -1,0 +1,19 @@
+[Unit]
+Description=Span Distributed Cloud
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/span
+EnvironmentFile=/opt/span/.env
+ExecStart=/usr/local/bin/docker-compose -f /opt/span/deploy/docker-compose.yml up -d
+ExecStop=/usr/local/bin/docker-compose -f /opt/span/deploy/docker-compose.yml down
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

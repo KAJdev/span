@@ -1,0 +1,4 @@
+database_url = "postgres://span:CHANGE_ME@localhost:5432/span"
+http_bind = "0.0.0.0:8080"
+grpc_bind = "0.0.0.0:50051"
+# nats_url = "nats://localhost:4222"
