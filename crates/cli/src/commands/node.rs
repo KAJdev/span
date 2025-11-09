@@ -30,18 +30,51 @@ pub async fn get(id: &str, cp_url: &str, token: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-pub async fn join(join_token: Option<&str>, cp_url: &str, token: Option<&str>) -> Result<()> {
-    let client = reqwest::Client::new();
-    let mut req = client.post(format!("{}/api/v1/cluster/join", cp_url.trim_end_matches('/')))
-        .json(&serde_json::json!({
-            "node_id": uuid::Uuid::new_v4().to_string(),
-            "node_name": "node",
-            "ip_address": local_ip().unwrap_or_else(|_| "127.0.0.1".to_string()),
-            "token": join_token,
-        }));
-    if let Some(t) = token { req = req.header("Authorization", format!("Bearer {}", t)); }
-    let resp = req.send().await?;
-    if resp.status().is_success() { println!("✓ Join request sent"); } else { eprintln!("Error: {}", resp.status()); }
+pub async fn join(join_token: Option<&str>, _cp_url: &str, _token: Option<&str>) -> Result<()> {
+    use dirs::home_dir;
+    use std::fs;
+    use std::path::PathBuf;
+    use proto::agent::{agent_service_client::AgentServiceClient, NodeInfo};
+    use tonic::transport::{ClientTlsConfig, Identity, Certificate as TlsCertificate, Channel};
+
+    #[derive(serde::Deserialize)]
+    struct JoinToken { control_plane_url: String, ca_cert: String }
+
+    let base = home_dir().unwrap_or_default().join(".config/span-agent");
+    fs::create_dir_all(&base)?;
+
+    let token_str = join_token.ok_or_else(|| anyhow::anyhow!("--token is required"))?;
+    let token_json = String::from_utf8(base64::decode(token_str)?)?;
+    let jt: JoinToken = serde_json::from_str(&token_json)?;
+
+    let ca_path = base.join("ca.crt");
+    fs::write(&ca_path, jt.ca_cert.as_bytes())?;
+
+    let cfg = serde_json::json!({
+        "control_plane_url": jt.control_plane_url,
+        "node_name": hostname::get().unwrap_or_default().to_string_lossy().to_string(),
+        "region": null,
+        "labels": {},
+        "cert_path": base.join("node.crt"),
+        "key_path": base.join("node.key"),
+        "ca_cert_path": ca_path,
+    });
+    let cfg_toml = toml::to_string_pretty(&cfg)?;
+    fs::write(base.join("config.toml"), cfg_toml)?;
+
+    let ca_pem = fs::read(&ca_path)?;
+    let tls = ClientTlsConfig::new().ca_certificate(TlsCertificate::from_pem(ca_pem));
+    let channel = Channel::from_shared(jt.control_plane_url.clone())?.tls_config(tls)?.connect().await?;
+    let mut client = AgentServiceClient::new(channel);
+
+    let req = NodeInfo { name: hostname::get().unwrap_or_default().to_string_lossy().to_string(), region: String::new(), labels: Default::default() };
+    let creds = client.register_node(req).await?.into_inner();
+    fs::write(base.join("node.crt"), &creds.cert)?;
+    fs::write(base.join("node.key"), &creds.key)?;
+    fs::write(base.join("node_id"), creds.node_id.as_bytes())?;
+
+    println!("Node registered successfully!");
+    println!("Run: span-agent --config {}", base.join("config.toml").display());
     Ok(())
 }
 
