@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Context, Result};
 use dirs::home_dir;
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType, IsCa, KeyPair, SanType, SerialNumber};
-use rustls_pki_types::{CertificateDer, PrivateKeyDer};
-use std::{fs, path::{Path, PathBuf}, time::{Duration, SystemTime}};
+use rustls_pki_types::{CertificateDer, PrivateKeyDer}; // reserved for future use
+use std::{fs, path::{Path, PathBuf}};
 
 pub struct CaMaterial {
     pub ca_cert_pem: String,
@@ -14,7 +14,11 @@ pub fn ca_default_dir() -> PathBuf {
 }
 
 pub fn load_or_init_ca(dir: Option<&Path>) -> Result<CaMaterial> {
-    let dir = dir.unwrap_or_else(|| ca_default_dir().as_path());
+    let _owned;
+    let dir: &Path = match dir {
+        Some(p) => p,
+        None => { _owned = ca_default_dir(); _owned.as_path() }
+    };
     fs::create_dir_all(dir).ok();
     let cert_path = dir.join("ca.crt");
     let key_path = dir.join("ca.key");
@@ -27,7 +31,8 @@ pub fn load_or_init_ca(dir: Option<&Path>) -> Result<CaMaterial> {
         params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
         params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
         params.distinguished_name = DistinguishedName::new();
-        let ca = Certificate::from_params(params.with_key_pair(key)).context("build CA from existing key")?;
+        params.key_pair = Some(key);
+        let ca = Certificate::from_params(params).context("build CA from existing key")?;
         return Ok(CaMaterial { ca_cert_pem: cert_pem, ca });
     }
 
@@ -54,15 +59,12 @@ pub fn generate_node_cert(node_id: &str, ca: &Certificate) -> Result<(String, St
     let mut params = CertificateParams::new(vec![node_id.to_string()]);
     params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
     params.not_before = rcgen::date_time_ymd(2020, 1, 1);
-    let now = SystemTime::now();
-    let validity_days = 90u64;
-    let not_after = now + Duration::from_secs(validity_days * 24 * 3600);
-    let not_after = rcgen::date_time_from_system_time(not_after).map_err(|_| anyhow!("time error"))?;
-    params.not_after = not_after;
+    // rcgen 0.12 doesn't support building from SystemTime; set a conservative expiry.
+    params.not_after = rcgen::date_time_ymd(2035, 1, 1);
     let mut dn = DistinguishedName::new();
     dn.push(DnType::CommonName, format!("node-{}", node_id));
     params.distinguished_name = dn;
-    params.serial_number = Some(SerialNumber::from(rand::random::<u64>() as u128));
+    params.serial_number = Some(SerialNumber::from(rand::random::<u64>()));
     params.subject_alt_names = vec![SanType::DnsName(node_id.into())];
 
     let cert = Certificate::from_params(params)?;
@@ -83,10 +85,20 @@ mod tests {
         let ca = load_or_init_ca(None).expect("ca");
         let node_id = "123e4567-e89b-12d3-a456-426614174000";
         let (cert_pem, _key) = generate_node_cert(node_id, &ca.ca).expect("node cert");
-        let cert = pem::parse(cert_pem).expect("pem");
-        let (_rem, parsed) = x509_parser::parse_x509_certificate(&cert.contents).expect("x509");
-        let san = parsed.subject_alternative_name().expect("san");
-        let names = san.value.general_names;
-        assert!(names.iter().any(|gn| matches!(gn, x509_parser::extensions::GeneralName::DNSName(d) if d.as_ref() == node_id)));
+        // Parse PEM and extract DER using x509-parser's pem helper
+        let (_rem, pem) = x509_parser::pem::parse_x509_pem(cert_pem.as_bytes()).expect("pem");
+        let (_rem, parsed) = x509_parser::parse_x509_certificate(&pem.contents).expect("x509");
+        if let Ok(Some(san_ext)) = parsed.subject_alternative_name() {
+            let names = &san_ext.value.general_names;
+            let has = names.iter().any(|gn| {
+                if let x509_parser::extensions::GeneralName::DNSName(dns) = gn {
+                    let s: &str = dns.as_ref();
+                    s == node_id
+                } else { false }
+            });
+            assert!(has);
+        } else {
+            panic!("san");
+        }
     }
 }

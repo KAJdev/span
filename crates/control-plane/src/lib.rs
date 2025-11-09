@@ -71,6 +71,7 @@ pub async fn start() -> anyhow::Result<()> {
     #[cfg(feature = "grpc")]
     let grpc = run_grpc(grpc_addr, state.clone());
     // Start node health monitor
+    #[cfg(feature = "grpc")]
     let monitor = monitor_node_health(state.clone());
     let shutdown = shutdown_signal();
 

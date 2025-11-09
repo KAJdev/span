@@ -1,5 +1,5 @@
 use proto::agent::{agent_service_client::AgentServiceClient, NodeStatus};
-use sysinfo::{System, SystemExt};
+use sysinfo::System;
 use std::time::Duration;
 use tonic::transport::{Channel, ClientTlsConfig, Certificate as TlsCertificate, Identity};
 
