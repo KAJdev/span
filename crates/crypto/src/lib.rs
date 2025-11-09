@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use dirs::home_dir;
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType, IsCa, KeyPair, SanType, SerialNumber};
-use rustls_pki_types::{CertificateDer, PrivateKeyDer}; // reserved for future use
+
 use std::{fs, path::{Path, PathBuf}};
 
 pub struct CaMaterial {
