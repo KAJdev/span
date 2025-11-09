@@ -2,6 +2,7 @@ pub mod api;
 #[cfg(feature = "grpc")]
 pub mod grpc;
 pub mod scheduler;
+pub mod nodes;
 pub mod state;
 pub mod config;
 pub mod events;
