@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*.*.*'
 
@@ -29,15 +31,35 @@ jobs:
         run: |
           cargo build --release -p span-cli --target ${{ matrix.target }}
       - name: Prepare artifact
+        id: prep
         run: |
           mkdir -p dist/bin
           cp target/${{ matrix.target }}/release/span dist/bin/span
           cp -r deploy dist/
           cp -r dashboard dist/
-          tar -czf span-${{ github.ref_name }}-linux-${{ matrix.arch }}.tar.gz -C dist .
-      - name: Upload Release Asset
+          VERSION="${GITHUB_REF_NAME}"
+          if [[ "${GITHUB_REF}" != refs/tags/* ]]; then VERSION="latest"; fi
+          TAR="span-${VERSION}-linux-${{ matrix.arch }}.tar.gz"
+          tar -czf "${TAR}" -C dist .
+          echo "asset=${TAR}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+      - name: Upload tagged release asset
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: span-${{ github.ref_name }}-linux-${{ matrix.arch }}.tar.gz
+          files: ${{ steps.prep.outputs.asset }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload latest release asset
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest
+          files: ${{ steps.prep.outputs.asset }}
+          update_existing: true
+          make_latest: true
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
