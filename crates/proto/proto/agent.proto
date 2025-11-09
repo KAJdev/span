@@ -1,0 +1,42 @@
+syntax = "proto3";
+package span.agent.v1;
+
+import "google/protobuf/empty.proto";
+
+service AgentService {
+  rpc RegisterNode(NodeInfo) returns (NodeCredentials);
+  rpc Heartbeat(NodeStatus) returns (google.protobuf.Empty);
+  rpc GetDesiredState(NodeId) returns (DesiredState);
+}
+
+message NodeInfo {
+  string name = 1;
+  string region = 2;
+  map<string, string> labels = 3;
+}
+
+message NodeCredentials {
+  string node_id = 1;
+  bytes cert = 2;
+  bytes key = 3;
+}
+
+message NodeStatus {
+  string node_id = 1;
+  string status = 2;
+  map<string, string> metadata = 3;
+}
+
+message NodeId {
+  string id = 1;
+}
+
+message DesiredState {
+  repeated Container containers = 1;
+}
+
+message Container {
+  string id = 1;
+  string image = 2;
+  map<string, string> env = 3;
+}

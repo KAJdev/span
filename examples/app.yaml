@@ -1,0 +1,7 @@
+apiVersion: span.io/v1
+kind: App
+metadata:
+  name: hello
+spec:
+  image: ghcr.io/example/hello:latest
+  replicas: 1

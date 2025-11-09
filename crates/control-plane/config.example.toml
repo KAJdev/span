@@ -1,0 +1,5 @@
+# Example configuration for span control plane
+# database_url can also come from DATABASE_URL env var
+# http_bind = "0.0.0.0:8080"
+# grpc_bind = "0.0.0.0:50051"
+# nats_url = "nats://127.0.0.1:4222"

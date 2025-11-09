@@ -1,0 +1,3 @@
+syntax = "proto3";
+package span.common.v1;
+// Placeholder for shared messages
