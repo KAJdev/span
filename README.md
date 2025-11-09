@@ -56,6 +56,10 @@ cargo build --release
 - install.sh — Unified installer
 - uninstall.sh — Cleanup script
 
+## WireGuard mesh
+
+Span configures a private WireGuard mesh across nodes. See docs/wireguard-debug.md for troubleshooting and manual commands.
+
 ## Health check
 
 ```

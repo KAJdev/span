@@ -1,10 +1,11 @@
-use proto::agent::{agent_service_client::AgentServiceClient, NodeStatus};
+use proto::agent::{agent_service_client::AgentServiceClient, NodeStatus, NodeId};
 use sysinfo::System;
 use std::time::Duration;
 use tonic::transport::{Channel, ClientTlsConfig, Certificate as TlsCertificate, Identity};
 
 pub async fn run_heartbeat(mut client: AgentServiceClient<Channel>, node_id: String) {
     let mut sys = System::new_all();
+    let mut tick: u64 = 0;
     loop {
         sys.refresh_all();
         let cpu = (sys.global_cpu_info().cpu_usage() as u64).to_string();
@@ -14,8 +15,23 @@ pub async fn run_heartbeat(mut client: AgentServiceClient<Channel>, node_id: Str
         metadata.insert("cpu".to_string(), cpu);
         metadata.insert("mem_used".to_string(), mem);
         metadata.insert("mem_total".to_string(), total);
+
+        if tick % 10 == 0 {
+            if let Ok(ip) = reqwest::get("https://api.ipify.org").await.and_then(|r| async { Ok(r.text().await?) }) {
+                metadata.insert("public_endpoint".to_string(), format!("{}:51820", ip));
+            }
+            if let Ok(resp) = client.get_wire_guard_config(NodeId { id: node_id.clone() }).await {
+                let cfg = resp.into_inner();
+                let peers: Vec<String> = cfg.peers.iter().filter_map(|p| p.allowed_ips.first().cloned()).collect();
+                let reachable = crate::wireguard::test_mesh_connectivity(&peers).await;
+                metadata.insert("wg_peers".to_string(), peers.len().to_string());
+                metadata.insert("wg_reachable".to_string(), reachable.len().to_string());
+            }
+        }
+
         let status = NodeStatus { node_id: node_id.clone(), status: "healthy".into(), metadata };
         let _ = client.heartbeat(status).await;
+        tick += 1;
         tokio::time::sleep(Duration::from_secs(30)).await;
     }
 }
