@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, 'capy/**' ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      docker:
+        image: docker:24.0-dind
+        privileged: true
+        options: >-
+          --dns 8.8.8.8 --dns 1.1.1.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install protoc
+        run: sudo apt-get update -y && sudo apt-get install -y protobuf-compiler
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Show toolchain
+        run: |
+          rustc --version
+          cargo --version
+      - name: Run tests
+        env:
+          RUST_LOG: info
+        run: |
+          cargo test --all --no-fail-fast -- --nocapture
