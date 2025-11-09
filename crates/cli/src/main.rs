@@ -70,6 +70,8 @@ enum NodeCommands {
     Join { #[arg(long)] token: Option<String> },
     /// Cordon a node (prevent new workloads)
     Cordon { id: String },
+    /// Uncordon a node (allow new workloads)
+    Uncordon { id: String },
     /// Drain a node (evict workloads)
     Drain { id: String },
     /// Remove a node
@@ -156,8 +158,10 @@ async fn main() -> anyhow::Result<()> {
             NodeCommands::Get { id } => commands::node::get(&id, &cli.cp_url, cli.token.as_deref()).await?,
             NodeCommands::Join { token } => commands::node::join(token.as_deref(), &cli.cp_url, cli.token.as_deref()).await?,
             NodeCommands::Cordon { id } => commands::node::cordon(&id, &cli.cp_url, cli.token.as_deref()).await?,
+            NodeCommands::Uncordon { id } => commands::node::uncordon(&id, &cli.cp_url, cli.token.as_deref()).await?,
             NodeCommands::Drain { id } => commands::node::drain(&id, &cli.cp_url, cli.token.as_deref()).await?,
             NodeCommands::Remove { id } => commands::node::remove(&id, &cli.cp_url, cli.token.as_deref()).await?,
+
         },
 
         Commands::App(cmd) => match cmd {

@@ -9,7 +9,7 @@ pub struct Namespace {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, sqlx::FromRow, Serialize, Deserialize)]
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
 pub struct Node {
     pub id: Uuid,
     pub name: String,
@@ -19,6 +19,7 @@ pub struct Node {
     pub status: String,
     pub heartbeat_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub cordoned: Option<bool>,
 }
 
 #[derive(Debug, sqlx::FromRow, Serialize, Deserialize)]

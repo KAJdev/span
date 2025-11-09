@@ -63,6 +63,15 @@ pub async fn drain(id: &str, cp_url: &str, token: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+pub async fn uncordon(id: &str, cp_url: &str, token: Option<&str>) -> Result<()> {
+    let client = reqwest::Client::new();
+    let mut req = client.post(format!("{}/api/v1/nodes/{}/uncordon", cp_url.trim_end_matches('/'), id));
+    if let Some(t) = token { req = req.header("Authorization", format!("Bearer {}", t)); }
+    let resp = req.send().await?;
+    if resp.status().is_success() { println!("✓ Uncordoned {}", id); } else { eprintln!("Error: {}", resp.status()); }
+    Ok(())
+}
+
 pub async fn remove(id: &str, cp_url: &str, token: Option<&str>) -> Result<()> {
     let client = reqwest::Client::new();
     let mut req = client.delete(format!("{}/api/v1/nodes/{}", cp_url.trim_end_matches('/'), id));
