@@ -2,35 +2,22 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use async_nats::Client;
 use axum::{routing::get, Router};
-use futures_util::{SinkExt, StreamExt};
-use testcontainers::{clients, images::generic::GenericImage, RunnableImage, Container};
+use futures_util::StreamExt;
+use testcontainers::{clients, core::WaitFor, GenericImage};
 use tokio::net::TcpListener;
-use tokio_tungstenite::tungstenite::Message;
-use tracing::info;
 
 use control_plane::events::logs::LogHub;
-
-async fn start_nats() -> (clients::Cli, Container<clients::Cli, GenericImage>) {
-    let docker = clients::Cli::default();
-    let image = RunnableImage::from(
-        GenericImage::new("nats:2.10").with_exposed_port(4222)
-            .with_wait_for(testcontainers::core::WaitFor::message_on_stdout("Server is ready"))
-    );
-    let node = docker.run(image);
-    (docker, node)
-}
-
-async fn connect_nats(node: &Container<clients::Cli, GenericImage>) -> Client {
-    let port = node.get_host_port_ipv4(4222);
-    let url = format!("nats://127.0.0.1:{port}");
-    async_nats::connect(url).await.expect("connect nats")
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn pubsub_delivery_and_buffer() {
     common::telemetry::init_tracing();
-    let (_docker, node) = start_nats().await;
-    let client = connect_nats(&node).await;
+    let docker = clients::Cli::default();
+    let image = GenericImage::new("nats:2.10").with_exposed_port(4222).with_wait_for(WaitFor::message_on_stdout("Server is ready"));
+    let node = docker.run(image);
+
+    let port = node.get_host_port_ipv4(4222);
+    let url = format!("nats://127.0.0.1:{port}");
+    let client = async_nats::connect(url).await.expect("connect nats");
 
     let hub = Arc::new(LogHub::new());
     hub.clone().start_subscribers(client.clone()).await;
@@ -49,8 +36,13 @@ async fn pubsub_delivery_and_buffer() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn websocket_streams_buffer_then_live() {
     common::telemetry::init_tracing();
-    let (_docker, node) = start_nats().await;
-    let client = connect_nats(&node).await;
+    let docker = clients::Cli::default();
+    let image = GenericImage::new("nats:2.10").with_exposed_port(4222).with_wait_for(WaitFor::message_on_stdout("Server is ready"));
+    let node = docker.run(image);
+
+    let port = node.get_host_port_ipv4(4222);
+    let url = format!("nats://127.0.0.1:{port}");
+    let client = async_nats::connect(url).await.expect("connect nats");
 
     let hub = Arc::new(LogHub::new());
     hub.clone().start_subscribers(client.clone()).await;
