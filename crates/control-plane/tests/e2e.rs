@@ -104,6 +104,10 @@ async fn e2e_websocket_log_streaming_with_nats() {
     client.publish(subject.clone(), "before 1".into()).await.unwrap();
     client.publish(subject.clone(), "before 2".into()).await.unwrap();
     tokio::time::sleep(Duration::from_millis(100)).await;
+    for _ in 0..50 {
+        if hub.get_buffer(&subject).await.len() >= 2 { break; }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 
     // Connect WS to full API route
     let (mut ws_stream, _) = tokio_tungstenite::connect_async(format!("ws://{}/api/v1/builds/e2e-build/logs", addr)).await.unwrap();

@@ -28,6 +28,10 @@ async fn pubsub_delivery_and_buffer() {
     client.publish(subject.to_string(), "line 2".into()).await.unwrap();
 
     tokio::time::sleep(Duration::from_millis(100)).await;
+    for _ in 0..50 {
+        if hub.get_buffer(subject).await.len() >= 2 { break; }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 
     let buf = hub.get_buffer(subject).await;
     assert_eq!(buf, vec!["line 1".to_string(), "line 2".to_string()]);
@@ -53,6 +57,10 @@ async fn websocket_streams_buffer_then_live() {
     client.publish(subject.clone(), "before 2".into()).await.unwrap();
 
     tokio::time::sleep(Duration::from_millis(100)).await;
+    for _ in 0..50 {
+        if hub.get_buffer(&subject).await.len() >= 2 { break; }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 
     // Minimal WS server using the same logic as handlers
     let hub_clone = hub.clone();
