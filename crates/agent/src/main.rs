@@ -4,9 +4,9 @@ mod wireguard;
 
 use config::AgentConfig;
 use dirs::home_dir;
-use proto::agent::{agent_service_client::AgentServiceClient, NodeInfo, NodeId};
+use proto::agent::{agent_service_client::AgentServiceClient, NodeInfo};
 use std::{fs, path::PathBuf};
-use tracing::{info, warn};
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     // Now connect with identity and start heartbeat
     let cert = fs::read(&cfg.cert_path)?;
     let key = fs::read(&cfg.key_path)?;
-    let mut client = heartbeat::make_client_with_identity(&cfg.control_plane_url, ca_pem.clone(), Some(cert), Some(key)).await?;
+    let client = heartbeat::make_client_with_identity(&cfg.control_plane_url, ca_pem.clone(), Some(cert), Some(key)).await?;
 
     let node_id_path = cfg.cert_path.parent().unwrap().join("node_id");
     let node_id = fs::read_to_string(node_id_path).unwrap_or_else(|_| "unknown".into());
@@ -50,8 +50,9 @@ async fn main() -> anyhow::Result<()> {
     // Spawn WireGuard refresh loop
     let base_clone = base_dir.clone();
     let node_id_clone = node_id.clone();
+    let client_for_wg = client.clone();
     tokio::spawn(async move {
-        wireguard::refresh_wireguard_loop(client.clone(), node_id_clone, base_clone).await
+        wireguard::refresh_wireguard_loop(client_for_wg, node_id_clone, base_clone).await
     });
 
     heartbeat::run_heartbeat(client, node_id).await;

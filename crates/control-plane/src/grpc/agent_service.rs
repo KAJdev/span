@@ -4,10 +4,8 @@ use proto::agent::{
     NodeInfo, NodeCredentials, NodeStatus, NodeId, DesiredState, Container, WireGuardConfig, Peer,
 };
 use crate::state::SharedState;
-use sqlx::types::Json;
 use uuid::Uuid;
-#[cfg(feature = "grpc")]
-use tonic::transport::server::TlsConnectInfo;
+
 
 #[derive(Clone)]
 pub struct AgentSvc {
@@ -45,9 +43,11 @@ impl AgentService for AgentSvc {
 
         let wg_ip_txt = next_ip.to_string();
 
+        let labels_json = serde_json::to_value(&info.labels).unwrap_or_else(|_| serde_json::json!({}));
+        let wg_ip_net: sqlx::types::ipnetwork::IpNetwork = sqlx::types::ipnetwork::IpNetwork::new(std::net::IpAddr::V4(next_ip), 32).unwrap();
         sqlx::query!(
-            "INSERT INTO nodes (id, name, region, labels, status, wg_pubkey, wg_ip) VALUES ($1, $2, $3, $4, 'registered', $5, $6::inet)",
-            node_id, info.name, info.region, Json(info.labels), info.wg_pubkey, wg_ip_txt
+            "INSERT INTO nodes (id, name, region, labels, status, wg_pubkey, wg_ip) VALUES ($1, $2, $3, $4, 'registered', $5, $6)",
+            node_id, info.name, info.region, labels_json, info.wg_pubkey, wg_ip_net
         )
         .execute(&self.state.db)
         .await
@@ -59,25 +59,10 @@ impl AgentService for AgentSvc {
         Ok(Response::new(NodeCredentials { node_id: node_id.to_string(), cert: cert_pem.into_bytes(), key: key_pem.into_bytes(), wg_ip: wg_ip_txt }))
     }
 
-    async fn heartbeat(&self, request: Request<NodeStatus>) -> Result<Response<prost_types::Empty>, Status> {
+    async fn heartbeat(&self, request: Request<NodeStatus>) -> Result<Response<()>, Status> {
         let body = request.get_ref();
-        let mut node_id = body.node_id.clone();
+        let node_id = body.node_id.clone();
         let status = &body.status;
-
-        if let Some(info) = request.extensions().get::<TlsConnectInfo>() {
-            if let Some(first) = info.peer_certs().and_then(|v| v.first()).cloned() {
-                if let Ok((_rem, parsed)) = x509_parser::parse_x509_certificate(first.as_ref()) {
-                    if let Some(san) = parsed.subject_alternative_name() {
-                        for gn in san.value.general_names.iter() {
-                            if let x509_parser::extensions::GeneralName::DNSName(dns) = gn {
-                                node_id = dns.to_string();
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         let node_uuid = Uuid::parse_str(&node_id).map_err(|_| Status::unauthenticated("invalid node id"))?;
 
@@ -105,7 +90,7 @@ impl AgentService for AgentSvc {
             let _ = nc.publish(subject, Vec::new().into()).await;
         }
 
-        Ok(Response::new(prost_types::Empty{}))
+        Ok(Response::new(()))
     }
 
     async fn get_desired_state(&self, _request: Request<NodeId>) -> Result<Response<DesiredState>, Status> {

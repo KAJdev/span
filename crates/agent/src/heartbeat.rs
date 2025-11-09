@@ -17,8 +17,10 @@ pub async fn run_heartbeat(mut client: AgentServiceClient<Channel>, node_id: Str
         metadata.insert("mem_total".to_string(), total);
 
         if tick % 10 == 0 {
-            if let Ok(ip) = reqwest::get("https://api.ipify.org").await.and_then(|r| async { Ok(r.text().await?) }) {
-                metadata.insert("public_endpoint".to_string(), format!("{}:51820", ip));
+            if let Ok(resp) = reqwest::get("https://api.ipify.org").await {
+                if let Ok(ip) = resp.text().await {
+                    metadata.insert("public_endpoint".to_string(), format!("{}:51820", ip));
+                }
             }
             if let Ok(resp) = client.get_wire_guard_config(NodeId { id: node_id.clone() }).await {
                 let cfg = resp.into_inner();
