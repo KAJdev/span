@@ -29,8 +29,11 @@ jobs:
         run: |
           rustc --version
           cargo --version
-      - name: Run tests
+      - name: Test common
+        run: cargo test -p common -- --nocapture
+      - name: Test models
+        run: cargo test -p models -- --nocapture
+      - name: Test control-plane
         env:
           RUST_LOG: info
-        run: |
-          cargo test --all --no-fail-fast -- --nocapture
+        run: cargo test -p control-plane -- --nocapture
