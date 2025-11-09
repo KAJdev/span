@@ -27,7 +27,8 @@ pub fn load_or_init_ca(dir: Option<&Path>) -> Result<CaMaterial> {
         params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
         params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
         params.distinguished_name = DistinguishedName::new();
-        let ca = Certificate::from_params(params.with_key_pair(key)).context("build CA from existing key")?;
+        params.key_pair = Some(key);
+        let ca = Certificate::from_params(params).context("build CA from existing key")?;
         return Ok(CaMaterial { ca_cert_pem: cert_pem, ca });
     }
 
@@ -54,15 +55,12 @@ pub fn generate_node_cert(node_id: &str, ca: &Certificate) -> Result<(String, St
     let mut params = CertificateParams::new(vec![node_id.to_string()]);
     params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
     params.not_before = rcgen::date_time_ymd(2020, 1, 1);
-    let now = SystemTime::now();
-    let validity_days = 90u64;
-    let not_after = now + Duration::from_secs(validity_days * 24 * 3600);
-    let not_after = rcgen::date_time_from_system_time(not_after).map_err(|_| anyhow!("time error"))?;
-    params.not_after = not_after;
+    // rcgen 0.12 doesn't support building from SystemTime; set a conservative expiry.
+    params.not_after = rcgen::date_time_ymd(2035, 1, 1);
     let mut dn = DistinguishedName::new();
     dn.push(DnType::CommonName, format!("node-{}", node_id));
     params.distinguished_name = dn;
-    params.serial_number = Some(SerialNumber::from(rand::random::<u64>() as u128));
+    params.serial_number = Some(SerialNumber::from(rand::random::<u64>()));
     params.subject_alt_names = vec![SanType::DnsName(node_id.into())];
 
     let cert = Certificate::from_params(params)?;
