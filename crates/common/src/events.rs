@@ -41,3 +41,29 @@ impl EventPublisher {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn subject_for_event_mappings() {
+        let e = SpanEvent::NodeHeartbeat { node_id: "node1".into(), status: "ok".into() };
+        assert_eq!(EventPublisher::subject_for_event(&e), "span.nodes.node1.heartbeat");
+
+        let e = SpanEvent::BuildStarted { build_id: "b1".into(), repo: "r".into() };
+        assert_eq!(EventPublisher::subject_for_event(&e), "span.builds.b1.status");
+
+        let e = SpanEvent::BuildLog { build_id: "b2".into(), line: "x".into() };
+        assert_eq!(EventPublisher::subject_for_event(&e), "span.builds.b2.logs");
+
+        let e = SpanEvent::BuildCompleted { build_id: "b3".into(), status: "s".into() };
+        assert_eq!(EventPublisher::subject_for_event(&e), "span.builds.b3.status");
+
+        let e = SpanEvent::DeploymentStarted { app_id: "app".into(), release_id: "rel".into() };
+        assert_eq!(EventPublisher::subject_for_event(&e), "span.deploys.rel.status");
+
+        let e = SpanEvent::ContainerLog { container_id: "cid".into(), line: "line".into() };
+        assert_eq!(EventPublisher::subject_for_event(&e), "span.containers.cid.logs");
+    }
+}
