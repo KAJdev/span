@@ -67,7 +67,7 @@ async fn e2e_websocket_log_streaming_with_nats() {
     let node = docker.run(image);
     let port = node.get_host_port_ipv4(4222);
     let url = format!("nats://127.0.0.1:{port}");
-    let client = async_nats::connect(url).await.expect("connect nats");
+    let client = tokio::time::timeout(Duration::from_secs(20), async_nats::connect(url)).await.expect("nats connect timeout").expect("connect nats");
 
     // Postgres (for state completeness, though not used here)
     let pg = GenericImage::new("postgres", "16")
@@ -110,16 +110,16 @@ async fn e2e_websocket_log_streaming_with_nats() {
     }
 
     // Connect WS to full API route
-    let (mut ws_stream, _) = tokio_tungstenite::connect_async(format!("ws://{}/api/v1/builds/e2e-build/logs", addr)).await.unwrap();
+    let (mut ws_stream, _) = tokio::time::timeout(Duration::from_secs(10), tokio_tungstenite::connect_async(format!("ws://{}/api/v1/builds/e2e-build/logs", addr))).await.expect("ws connect timeout").unwrap();
 
     // Expect buffered
-    let msg1 = ws_stream.next().await.unwrap().unwrap();
+    let msg1 = tokio::time::timeout(Duration::from_secs(5), ws_stream.next()).await.expect("ws recv timeout").unwrap().unwrap();
     assert_eq!(msg1.to_text().unwrap(), "before 1");
-    let msg2 = ws_stream.next().await.unwrap().unwrap();
+    let msg2 = tokio::time::timeout(Duration::from_secs(5), ws_stream.next()).await.expect("ws recv timeout").unwrap().unwrap();
     assert_eq!(msg2.to_text().unwrap(), "before 2");
 
     // Then live
     client.publish(subject.clone(), "live 1".into()).await.unwrap();
-    let msg3 = ws_stream.next().await.unwrap().unwrap();
+    let msg3 = tokio::time::timeout(Duration::from_secs(5), ws_stream.next()).await.expect("ws recv timeout").unwrap().unwrap();
     assert_eq!(msg3.to_text().unwrap(), "live 1");
 }

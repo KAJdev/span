@@ -17,7 +17,7 @@ async fn pubsub_delivery_and_buffer() {
 
     let port = node.get_host_port_ipv4(4222);
     let url = format!("nats://127.0.0.1:{port}");
-    let client = async_nats::connect(url).await.expect("connect nats");
+    let client = tokio::time::timeout(Duration::from_secs(20), async_nats::connect(url)).await.expect("nats connect timeout").expect("connect nats");
 
     let hub = Arc::new(LogHub::new());
     hub.clone().start_subscribers(client.clone()).await;
@@ -46,7 +46,7 @@ async fn websocket_streams_buffer_then_live() {
 
     let port = node.get_host_port_ipv4(4222);
     let url = format!("nats://127.0.0.1:{port}");
-    let client = async_nats::connect(url).await.expect("connect nats");
+    let client = tokio::time::timeout(Duration::from_secs(20), async_nats::connect(url)).await.expect("nats connect timeout").expect("connect nats");
 
     let hub = Arc::new(LogHub::new());
     hub.clone().start_subscribers(client.clone()).await;
@@ -86,15 +86,15 @@ async fn websocket_streams_buffer_then_live() {
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap(); });
 
     // Connect client
-    let (mut ws_stream, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", addr)).await.unwrap();
+    let (mut ws_stream, _) = tokio::time::timeout(Duration::from_secs(10), tokio_tungstenite::connect_async(format!("ws://{}/ws", addr))).await.expect("ws connect timeout").unwrap();
 
-    let msg1 = ws_stream.next().await.unwrap().unwrap();
+    let msg1 = tokio::time::timeout(Duration::from_secs(5), ws_stream.next()).await.expect("ws recv timeout").unwrap().unwrap();
     assert_eq!(msg1.to_text().unwrap(), "before 1");
-    let msg2 = ws_stream.next().await.unwrap().unwrap();
+    let msg2 = tokio::time::timeout(Duration::from_secs(5), ws_stream.next()).await.expect("ws recv timeout").unwrap().unwrap();
     assert_eq!(msg2.to_text().unwrap(), "before 2");
 
     // Publish live and expect to receive
     client.publish(subject.clone(), "live 1".into()).await.unwrap();
-    let msg3 = ws_stream.next().await.unwrap().unwrap();
+    let msg3 = tokio::time::timeout(Duration::from_secs(5), ws_stream.next()).await.expect("ws recv timeout").unwrap().unwrap();
     assert_eq!(msg3.to_text().unwrap(), "live 1");
 }
