@@ -34,7 +34,7 @@ models = { path = "../models" }
 proto = { path = "../proto" }
 
 [features]
-default = ["grpc"]
+default = []
 grpc = []
 
 [dev-dependencies]
