@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Context, Result};
 use dirs::home_dir;
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType, IsCa, KeyPair, SanType, SerialNumber};
-use rustls_pki_types::{CertificateDer, PrivateKeyDer};
-use std::{fs, path::{Path, PathBuf}, time::{Duration, SystemTime}};
+use rustls_pki_types::{CertificateDer, PrivateKeyDer}; // reserved for future use
+use std::{fs, path::{Path, PathBuf}};
 
 pub struct CaMaterial {
     pub ca_cert_pem: String,
@@ -14,7 +14,11 @@ pub fn ca_default_dir() -> PathBuf {
 }
 
 pub fn load_or_init_ca(dir: Option<&Path>) -> Result<CaMaterial> {
-    let dir = dir.unwrap_or_else(|| ca_default_dir().as_path());
+    let _owned;
+    let dir: &Path = match dir {
+        Some(p) => p,
+        None => { _owned = ca_default_dir(); _owned.as_path() }
+    };
     fs::create_dir_all(dir).ok();
     let cert_path = dir.join("ca.crt");
     let key_path = dir.join("ca.key");
@@ -81,9 +85,11 @@ mod tests {
         let ca = load_or_init_ca(None).expect("ca");
         let node_id = "123e4567-e89b-12d3-a456-426614174000";
         let (cert_pem, _key) = generate_node_cert(node_id, &ca.ca).expect("node cert");
-        let cert = pem::parse(cert_pem).expect("pem");
-        let (_rem, parsed) = x509_parser::parse_x509_certificate(&cert.contents).expect("x509");
-        let san = parsed.subject_alternative_name().expect("san");
+        // Parse PEM and extract DER using x509-parser's pem helper
+        let pem = x509_parser::pem::parse_x509_pem(cert_pem.as_bytes()).expect("pem");
+        let (_rem, parsed) = x509_parser::parse_x509_certificate(pem.contents()).expect("x509");
+        let san_opt = parsed.subject_alternative_name();
+        let san = san_opt.expect("san");
         let names = san.value.general_names;
         assert!(names.iter().any(|gn| matches!(gn, x509_parser::extensions::GeneralName::DNSName(d) if d.as_ref() == node_id)));
     }
