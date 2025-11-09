@@ -28,3 +28,7 @@ rpassword = "7"
 tokio-tungstenite = { version = "0.21", features = ["rustls-tls-webpki-roots"] }
 futures-util = "0.3"
 toml.workspace = true
+proto = { path = "../proto" }
+tonic = { workspace = true }
+base64 = "0.21"
+hostname = "0.4"

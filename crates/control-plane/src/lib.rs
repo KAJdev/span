@@ -20,6 +20,8 @@ use tracing::{info, warn};
 use crate::{api::routes::router, state::{AppState, SharedState}};
 #[cfg(feature = "grpc")]
 use crate::grpc::agent_service::AgentSvc;
+#[cfg(feature = "grpc")]
+use tonic::transport::{ServerTlsConfig, Identity, Certificate as TlsCertificate};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -55,6 +57,11 @@ pub async fn start() -> anyhow::Result<()> {
         (None, Arc::new(events::logs::LogHub::new()))
     };
 
+    #[cfg(feature = "grpc")]
+    let ca_material = crypto::load_or_init_ca(None)?;
+    #[cfg(feature = "grpc")]
+    let state: SharedState = Arc::new(AppState { db: pool, version: VERSION, cluster_id, jwt_secret, nats, log_hub, ca_pem: ca_material.ca_cert_pem.clone(), ca: Arc::new(ca_material.ca) });
+    #[cfg(not(feature = "grpc"))]
     let state: SharedState = Arc::new(AppState { db: pool, version: VERSION, cluster_id, jwt_secret, nats, log_hub });
 
     let http_addr: SocketAddr = cfg.http_bind.parse()?;
@@ -62,13 +69,16 @@ pub async fn start() -> anyhow::Result<()> {
 
     let http = run_http(http_addr, state.clone());
     #[cfg(feature = "grpc")]
-    let grpc = run_grpc(grpc_addr);
+    let grpc = run_grpc(grpc_addr, state.clone());
+    // Start node health monitor
+    let monitor = monitor_node_health(state.clone());
     let shutdown = shutdown_signal();
 
     #[cfg(feature = "grpc")]
     tokio::select! {
         res = http => { res?; },
         res = grpc => { res?; },
+        _ = monitor => { info!("Health monitor exited"); },
         _ = shutdown => { info!("Shutdown signal received"); }
     }
 
@@ -90,10 +100,19 @@ pub async fn run_http(addr: SocketAddr, state: SharedState) -> anyhow::Result<()
 }
 
 #[cfg(feature = "grpc")]
-pub async fn run_grpc(addr: SocketAddr) -> anyhow::Result<()> {
-    let svc = AgentSvc::default();
-    tracing::info!(%addr, "gRPC API listening");
+pub async fn run_grpc(addr: SocketAddr, state: SharedState) -> anyhow::Result<()> {
+    // Build server identity signed by CA for TLS
+    let (server_cert_pem, server_key_pem) = crypto::generate_node_cert("control-plane", &state.ca)?;
+    let identity = Identity::from_pem(server_cert_pem.clone(), server_key_pem.clone());
+    let _client_ca = TlsCertificate::from_pem(state.ca_pem.clone());
+
+    // Use optional client auth: allow both anonymous and authenticated clients.
+    let tls = ServerTlsConfig::new().identity(identity);
+
+    let svc = AgentSvc::new(state.clone());
+    tracing::info!(%addr, "gRPC API listening (TLS enabled)");
     Server::builder()
+        .tls_config(tls)?
         .add_service(AgentServiceServer::new(svc))
         .serve_with_shutdown(addr, shutdown_signal())
         .await?;
@@ -116,4 +135,17 @@ pub async fn shutdown_signal() {
     let terminate = std::future::pending::<()>();
 
     tokio::select! { _ = ctrl_c => {}, _ = terminate => {}, }
+}
+
+#[cfg(feature = "grpc")]
+pub async fn monitor_node_health(state: SharedState) {
+    use std::time::Duration;
+    loop {
+        let _ = sqlx::query!(
+            "UPDATE nodes SET status = 'unreachable' WHERE heartbeat_at < NOW() - INTERVAL '2 minutes' AND status != 'unreachable'"
+        )
+        .execute(&state.db)
+        .await;
+        tokio::time::sleep(Duration::from_secs(30)).await;
+    }
 }

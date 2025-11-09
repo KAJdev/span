@@ -8,3 +8,14 @@ repository.workspace = true
 [dependencies]
 age.workspace = true
 chacha20poly1305.workspace = true
+rcgen = "0.12"
+rustls-pki-types = "1"
+dirs = "5"
+anyhow.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+rand = "0.8"
+
+[dev-dependencies]
+pem = "3"
+x509-parser = "0.15"

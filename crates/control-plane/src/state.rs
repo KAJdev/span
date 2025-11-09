@@ -10,6 +10,10 @@ pub struct AppState {
     pub jwt_secret: String,
     pub nats: Option<async_nats::Client>,
     pub log_hub: Arc<LogHub>,
+    #[cfg(feature = "grpc")]
+    pub ca_pem: String,
+    #[cfg(feature = "grpc")]
+    pub ca: Arc<rcgen::Certificate>,
 }
 
 pub type SharedState = Arc<AppState>;
