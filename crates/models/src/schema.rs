@@ -20,6 +20,8 @@ pub struct Node {
     pub heartbeat_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub cordoned: Option<bool>,
+    pub wg_ip: Option<String>,
+    pub public_endpoint: Option<String>,
 }
 
 #[derive(Debug, sqlx::FromRow, Serialize, Deserialize)]

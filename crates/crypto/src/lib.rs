@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use dirs::home_dir;
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType, IsCa, KeyPair, SanType, SerialNumber};
-use rustls_pki_types::{CertificateDer, PrivateKeyDer}; // reserved for future use
+
 use std::{fs, path::{Path, PathBuf}};
 
 pub struct CaMaterial {
@@ -30,8 +30,11 @@ pub fn load_or_init_ca(dir: Option<&Path>) -> Result<CaMaterial> {
         let mut params = CertificateParams::default();
         params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
         params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-        params.distinguished_name = DistinguishedName::new();
+        let mut dn = DistinguishedName::new();
+        dn.push(DnType::CommonName, "Span Root CA");
+        params.distinguished_name = dn;
         params.key_pair = Some(key);
+        // Note: rcgen doesn't reconstruct from an existing cert; we rebuild params with same subject and key
         let ca = Certificate::from_params(params).context("build CA from existing key")?;
         return Ok(CaMaterial { ca_cert_pem: cert_pem, ca });
     }

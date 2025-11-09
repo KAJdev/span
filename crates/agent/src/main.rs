@@ -1,11 +1,12 @@
 mod config;
 mod heartbeat;
+mod wireguard;
 
 use config::AgentConfig;
 use dirs::home_dir;
 use proto::agent::{agent_service_client::AgentServiceClient, NodeInfo};
 use std::{fs, path::PathBuf};
-use tracing::{info, warn};
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -22,15 +23,20 @@ async fn main() -> anyhow::Result<()> {
 
     let ca_pem = cfg.ca_cert_path.as_ref().and_then(|p| fs::read(p).ok());
 
+    // Ensure WireGuard keys exist, capture pubkey
+    let base_dir = cfg.cert_path.parent().unwrap().to_path_buf();
+    let wg_pubkey = wireguard::ensure_wg_keys(&base_dir)?;
+
     if !have_creds {
         let mut client = heartbeat::make_client_with_identity(&cfg.control_plane_url, ca_pem.clone(), None, None).await?;
-        let req = NodeInfo { name: cfg.node_name.clone(), region: cfg.region.clone().unwrap_or_default(), labels: cfg.labels.clone() };
+        let req = NodeInfo { name: cfg.node_name.clone(), region: cfg.region.clone().unwrap_or_default(), labels: cfg.labels.clone(), wg_pubkey: wg_pubkey.clone() };
         let resp = client.register_node(req).await?.into_inner();
-        fs::create_dir_all(cfg.cert_path.parent().unwrap()).ok();
+        fs::create_dir_all(&base_dir).ok();
         fs::write(&cfg.cert_path, &resp.cert)?;
         fs::write(&cfg.key_path, &resp.key)?;
-        fs::write(cfg.cert_path.parent().unwrap().join("node_id"), resp.node_id.as_bytes()).ok();
-        info!(node_id = %resp.node_id, "Registered and saved mTLS credentials");
+        fs::write(base_dir.join("node_id"), resp.node_id.as_bytes()).ok();
+        fs::write(base_dir.join("wg_ip"), resp.wg_ip.as_bytes()).ok();
+        info!(node_id = %resp.node_id, wg_ip = %resp.wg_ip, "Registered and saved mTLS credentials");
     }
 
     // Now connect with identity and start heartbeat
@@ -40,6 +46,15 @@ async fn main() -> anyhow::Result<()> {
 
     let node_id_path = cfg.cert_path.parent().unwrap().join("node_id");
     let node_id = fs::read_to_string(node_id_path).unwrap_or_else(|_| "unknown".into());
+
+    // Spawn WireGuard refresh loop
+    let base_clone = base_dir.clone();
+    let node_id_clone = node_id.clone();
+    let client_for_wg = client.clone();
+    tokio::spawn(async move {
+        wireguard::refresh_wireguard_loop(client_for_wg, node_id_clone, base_clone).await
+    });
+
     heartbeat::run_heartbeat(client, node_id).await;
     Ok(())
 }
