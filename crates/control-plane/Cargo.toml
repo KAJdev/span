@@ -33,6 +33,10 @@ common = { path = "../common" }
 models = { path = "../models" }
 proto = { path = "../proto" }
 
+[features]
+default = ["grpc"]
+grpc = []
+
 [dev-dependencies]
 serde_json.workspace = true
 axum.workspace = true

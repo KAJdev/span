@@ -19,8 +19,9 @@ impl LogHub {
         let apps = self.clone();
         let builds = self.clone();
 
+        let client_apps = client.clone();
         tokio::spawn(async move {
-            match client.subscribe("span.apps.*.*.logs").await {
+            match client_apps.subscribe("span.apps.*.*.logs").await {
                 Ok(mut sub) => {
                     info!(subject = "span.apps.*.*.logs", "Subscribed to app logs");
                     while let Some(msg) = sub.next().await {
@@ -33,8 +34,9 @@ impl LogHub {
             }
         });
 
+        let client_builds = client.clone();
         tokio::spawn(async move {
-            match client.subscribe("span.builds.*.logs").await {
+            match client_builds.subscribe("span.builds.*.logs").await {
                 Ok(mut sub) => {
                     info!(subject = "span.builds.*.logs", "Subscribed to build logs");
                     while let Some(msg) = sub.next().await {

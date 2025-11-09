@@ -1,4 +1,5 @@
 pub mod api;
+#[cfg(feature = "grpc")]
 pub mod grpc;
 pub mod scheduler;
 pub mod state;
@@ -8,12 +9,16 @@ pub mod events;
 use std::{net::SocketAddr, sync::Arc};
 use axum::Router;
 use models::{create_pool, run_migrations};
+#[cfg(feature = "grpc")]
 use proto::agent::agent_service_server::AgentServiceServer;
 use tokio::net::TcpListener;
+#[cfg(feature = "grpc")]
 use tonic::transport::Server;
 use tracing::{info, warn};
 
-use crate::{api::routes::router, grpc::agent_service::AgentSvc, state::{AppState, SharedState}};
+use crate::{api::routes::router, state::{AppState, SharedState}};
+#[cfg(feature = "grpc")]
+use crate::grpc::agent_service::AgentSvc;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -55,12 +60,20 @@ pub async fn start() -> anyhow::Result<()> {
     let grpc_addr: SocketAddr = cfg.grpc_bind.parse()?;
 
     let http = run_http(http_addr, state.clone());
+    #[cfg(feature = "grpc")]
     let grpc = run_grpc(grpc_addr);
     let shutdown = shutdown_signal();
 
+    #[cfg(feature = "grpc")]
     tokio::select! {
         res = http => { res?; },
         res = grpc => { res?; },
+        _ = shutdown => { info!("Shutdown signal received"); }
+    }
+
+    #[cfg(not(feature = "grpc"))]
+    tokio::select! {
+        res = http => { res?; },
         _ = shutdown => { info!("Shutdown signal received"); }
     }
 
@@ -75,6 +88,7 @@ pub async fn run_http(addr: SocketAddr, state: SharedState) -> anyhow::Result<()
     Ok(())
 }
 
+#[cfg(feature = "grpc")]
 pub async fn run_grpc(addr: SocketAddr) -> anyhow::Result<()> {
     let svc = AgentSvc::default();
     tracing::info!(%addr, "gRPC API listening");
