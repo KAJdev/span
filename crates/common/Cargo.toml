@@ -11,3 +11,6 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+anyhow.workspace = true
+async-nats.workspace = true
+sqlx.workspace = true

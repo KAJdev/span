@@ -23,7 +23,7 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
 
 # HTTP server
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["trace", "cors"] }
 
@@ -53,6 +53,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
+dirs = "5"
 
 # Crypto (for later)
 chacha20poly1305 = "0.10"
