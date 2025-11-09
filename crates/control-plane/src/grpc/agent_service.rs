@@ -14,8 +14,8 @@ impl AgentService for AgentSvc {
         Ok(Response::new(creds))
     }
 
-    async fn heartbeat(&self, _request: Request<NodeStatus>) -> Result<Response<prost_types::Empty>, Status> {
-        Ok(Response::new(prost_types::Empty{}))
+    async fn heartbeat(&self, _request: Request<NodeStatus>) -> Result<Response<()>, Status> {
+        Ok(Response::new(()))
     }
 
     async fn get_desired_state(&self, _request: Request<NodeId>) -> Result<Response<DesiredState>, Status> {
