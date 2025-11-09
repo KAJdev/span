@@ -32,13 +32,13 @@ futures-util = "0.3"
 common = { path = "../common" }
 models = { path = "../models" }
 proto = { path = "../proto" }
-crypto = { path = "../crypto" }
-rcgen = "0.12"
-x509-parser = "0.15"
+crypto = { path = "../crypto", optional = true }
+rcgen = { version = "0.12", optional = true }
+x509-parser = { version = "0.15", optional = true }
 
 [features]
 default = []
-grpc = []
+grpc = ["dep:crypto", "dep:rcgen", "dep:x509-parser"]
 
 [dev-dependencies]
 serde_json.workspace = true
