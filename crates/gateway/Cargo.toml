@@ -12,3 +12,5 @@ path = "src/main.rs"
 [dependencies]
 tracing.workspace = true
 common = { path = "../common" }
+axum.workspace = true
+tokio.workspace = true

@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            target: x86_64-unknown-linux-gnu
+          - arch: arm64
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - name: Build CLI
+        run: |
+          cargo build --release -p span-cli --target ${{ matrix.target }}
+      - name: Prepare artifact
+        run: |
+          mkdir -p dist/bin
+          cp target/${{ matrix.target }}/release/span dist/bin/span
+          cp -r deploy dist/
+          cp -r dashboard dist/
+          tar -czf span-${{ github.ref_name }}-linux-${{ matrix.arch }}.tar.gz -C dist .
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: span-${{ github.ref_name }}-linux-${{ matrix.arch }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

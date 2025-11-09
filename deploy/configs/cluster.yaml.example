@@ -1,0 +1,7 @@
+cluster:
+  name: span
+  network: 10.42.0.0/16
+  wireguard:
+    listen_port: 51820
+    cidr: 10.42.0.0/16
+nodes: []

@@ -1,0 +1,189 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: span-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-span}
+      POSTGRES_USER: ${POSTGRES_USER:-span}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_REPLICATION_MODE: ${POSTGRES_REPLICATION_MODE:-master}
+      POSTGRES_MASTER_HOST: ${POSTGRES_MASTER_HOST:-}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - span
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-span}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: span-nats
+    restart: unless-stopped
+    command:
+      - "-js"
+      - "-m=8222"
+      - "-cluster=nats://0.0.0.0:6222"
+      - "-routes=${NATS_ROUTES:-}"
+    ports:
+      - "4222:4222"
+    networks:
+      - span
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: span-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_DISTRIBUTED_MODE_ENABLED: ${MINIO_DISTRIBUTED_MODE_ENABLED:-no}
+      MINIO_DISTRIBUTED_NODES: ${MINIO_DISTRIBUTED_NODES:-}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - span
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  control-plane:
+    build:
+      context: ..
+      dockerfile: deploy/dockerfiles/Dockerfile.control-plane
+    image: span/control-plane:${SPAN_VERSION:-latest}
+    container_name: span-control-plane
+    restart: unless-stopped
+    ports:
+      - "${CP_HTTP_PORT:-8080}:8080"
+      - "${CP_GRPC_PORT:-50051}:50051"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-span}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-span}
+      NODE_ID: ${NODE_ID}
+      NODE_NAME: ${NODE_NAME:-${HOSTNAME}}
+      CLUSTER_MODE: ${CLUSTER_MODE:-standalone}
+      CLUSTER_JOIN: ${CLUSTER_JOIN:-}
+      CLUSTER_PEERS: ${CLUSTER_PEERS:-}
+      NATS_URL: nats://nats:4222
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      SPAN_MASTER_KEY: ${SPAN_MASTER_KEY}
+      RUST_LOG: ${RUST_LOG:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - span
+    volumes:
+      - span-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  agent:
+    build:
+      context: ..
+      dockerfile: deploy/dockerfiles/Dockerfile.agent
+    image: span/agent:${SPAN_VERSION:-latest}
+    container_name: span-agent
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    environment:
+      NODE_ID: ${NODE_ID}
+      CONTROL_PLANE_URL: http://localhost:8080
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - /var/lib/span/agent:/data
+      - agent-certs:/certs
+    depends_on:
+      control-plane:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: deploy/dockerfiles/Dockerfile.gateway
+    image: span/gateway:${SPAN_VERSION:-latest}
+    container_name: span-gateway
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      CONTROL_PLANE_URL: http://localhost:8080
+      CACHE_DIR: /cache
+      BIND_HTTP: ${GATEWAY_BIND_HTTP:-0.0.0.0:80}
+      BIND_HTTPS: ${GATEWAY_BIND_HTTPS:-0.0.0.0:443}
+      RUST_LOG: ${RUST_LOG:-info}
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    volumes:
+      - gateway-cache:/cache
+      - gateway-certs:/certs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: ../deploy/dockerfiles/Dockerfile.dashboard
+    image: span/dashboard:${SPAN_VERSION:-latest}
+    container_name: span-dashboard
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    environment:
+      CONTROL_PLANE_URL: http://control-plane:8080
+      JWT_SECRET: ${JWT_SECRET}
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NODE_ENV: production
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    networks:
+      - span
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  span:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  minio-data:
+  span-data:
+  agent-certs:
+  gateway-cache:
+  gateway-certs:
