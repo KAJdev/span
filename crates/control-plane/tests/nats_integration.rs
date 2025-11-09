@@ -12,7 +12,7 @@ use control_plane::events::logs::LogHub;
 async fn pubsub_delivery_and_buffer() {
     common::telemetry::init_tracing();
     let docker = clients::Cli::default();
-    let image = GenericImage::new("nats:2.10").with_exposed_port(4222).with_wait_for(WaitFor::message_on_stdout("Server is ready"));
+    let image = GenericImage::new("nats", "2.10").with_exposed_port(4222).with_wait_for(WaitFor::message_on_stdout("Server is ready"));
     let node = docker.run(image);
 
     let port = node.get_host_port_ipv4(4222);
@@ -37,7 +37,7 @@ async fn pubsub_delivery_and_buffer() {
 async fn websocket_streams_buffer_then_live() {
     common::telemetry::init_tracing();
     let docker = clients::Cli::default();
-    let image = GenericImage::new("nats:2.10").with_exposed_port(4222).with_wait_for(WaitFor::message_on_stdout("Server is ready"));
+    let image = GenericImage::new("nats", "2.10").with_exposed_port(4222).with_wait_for(WaitFor::message_on_stdout("Server is ready"));
     let node = docker.run(image);
 
     let port = node.get_host_port_ipv4(4222);
