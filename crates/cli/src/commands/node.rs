@@ -67,7 +67,20 @@ pub async fn join(join_token: Option<&str>, _cp_url: &str, _token: Option<&str>)
     let channel = Channel::from_shared(jt.control_plane_url.clone())?.tls_config(tls)?.connect().await?;
     let mut client = AgentServiceClient::new(channel);
 
-    let req = NodeInfo { name: hostname::get().unwrap_or_default().to_string_lossy().to_string(), region: String::new(), labels: Default::default() };
+    // Generate WireGuard keys and persist so the agent reuses them
+    let priv_path = base.join("wg.key");
+    let pub_path = base.join("wg.pub");
+    let wg_pubkey = if priv_path.exists() && pub_path.exists() {
+        std::fs::read_to_string(&pub_path).unwrap_or_default().trim().to_string()
+    } else {
+        let private_key = wireguard_keys::Privkey::generate();
+        let public_key = private_key.pubkey();
+        std::fs::write(&priv_path, private_key.to_base64())?;
+        std::fs::write(&pub_path, public_key.to_base64())?;
+        public_key.to_base64()
+    };
+
+    let req = NodeInfo { name: hostname::get().unwrap_or_default().to_string_lossy().to_string(), region: String::new(), labels: Default::default(), wg_pubkey };
     let creds = client.register_node(req).await?.into_inner();
     fs::write(base.join("node.crt"), &creds.cert)?;
     fs::write(base.join("node.key"), &creds.key)?;
