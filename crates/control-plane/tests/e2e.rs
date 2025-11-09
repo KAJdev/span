@@ -11,6 +11,10 @@ use models::{create_pool, run_migrations};
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn e2e_health_and_cluster_info() {
     common::telemetry::init_tracing();
+    if !(std::path::Path::new("/var/run/docker.sock").exists() || std::env::var("DOCKER_HOST").is_ok()) {
+        eprintln!("skipping test: docker not available");
+        return;
+    }
     // Start Postgres
     let docker = clients::Cli::default();
     let image = GenericImage::new("postgres", "16")
@@ -59,6 +63,10 @@ async fn e2e_health_and_cluster_info() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn e2e_websocket_log_streaming_with_nats() {
     common::telemetry::init_tracing();
+    if !(std::path::Path::new("/var/run/docker.sock").exists() || std::env::var("DOCKER_HOST").is_ok()) {
+        eprintln!("skipping test: docker not available");
+        return;
+    }
     // NATS
     let docker = clients::Cli::default();
     let image = GenericImage::new("nats", "2.10")
