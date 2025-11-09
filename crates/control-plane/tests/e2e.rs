@@ -17,7 +17,7 @@ async fn e2e_health_and_cluster_info() {
     }
     // Start Postgres
     let docker = clients::Cli::default();
-    let image = GenericImage::new("postgres", "16")
+    let image = GenericImage::new("postgres", "16-alpine")
         .with_env_var("POSTGRES_PASSWORD", "pass")
         .with_env_var("POSTGRES_DB", "span_test")
         .with_exposed_port(5432)
@@ -69,7 +69,7 @@ async fn e2e_websocket_log_streaming_with_nats() {
     }
     // NATS
     let docker = clients::Cli::default();
-    let image = GenericImage::new("nats", "2.10")
+    let image = GenericImage::new("nats", "2.10-alpine")
         .with_exposed_port(4222)
         .with_wait_for(WaitFor::message_on_stdout("Server is ready"));
     let node = docker.run(image);
@@ -78,7 +78,7 @@ async fn e2e_websocket_log_streaming_with_nats() {
     let client = tokio::time::timeout(Duration::from_secs(20), async_nats::connect(url)).await.expect("nats connect timeout").expect("connect nats");
 
     // Postgres (for state completeness, though not used here)
-    let pg = GenericImage::new("postgres", "16")
+    let pg = GenericImage::new("postgres", "16-alpine")
         .with_env_var("POSTGRES_PASSWORD", "pass")
         .with_env_var("POSTGRES_DB", "span_test")
         .with_exposed_port(5432)
