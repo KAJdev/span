@@ -3,6 +3,7 @@ pub mod grpc;
 pub mod scheduler;
 pub mod state;
 pub mod config;
+pub mod events;
 
 use std::{net::SocketAddr, sync::Arc};
 use axum::Router;
@@ -10,7 +11,7 @@ use models::{create_pool, run_migrations};
 use proto::agent::agent_service_server::AgentServiceServer;
 use tokio::net::TcpListener;
 use tonic::transport::Server;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{api::routes::router, grpc::agent_service::AgentSvc, state::{AppState, SharedState}};
 
@@ -29,7 +30,26 @@ pub async fn start() -> anyhow::Result<()> {
     let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "dev-secret".into());
     let cluster_id = std::env::var("SPAN_CLUSTER_ID").unwrap_or_else(|_| uuid::Uuid::new_v4().to_string());
 
-    let state: SharedState = Arc::new(AppState { db: pool, version: VERSION, cluster_id, jwt_secret });
+    // NATS (optional for MVP)
+    let (nats, log_hub) = if let Some(url) = cfg.nats_url.clone() {
+        match async_nats::connect(url.clone()).await {
+            Ok(client) => {
+                info!(%url, "Connected to NATS");
+                let hub = Arc::new(events::logs::LogHub::new());
+                hub.clone().start_subscribers(client.clone()).await;
+                (Some(client), hub)
+            }
+            Err(e) => {
+                warn!(error=%e, "Failed to connect to NATS; continuing without event bus");
+                (None, Arc::new(events::logs::LogHub::new()))
+            }
+        }
+    } else {
+        warn!("NATS URL not configured; event bus disabled");
+        (None, Arc::new(events::logs::LogHub::new()))
+    };
+
+    let state: SharedState = Arc::new(AppState { db: pool, version: VERSION, cluster_id, jwt_secret, nats, log_hub });
 
     let http_addr: SocketAddr = cfg.http_bind.parse()?;
     let grpc_addr: SocketAddr = cfg.grpc_bind.parse()?;

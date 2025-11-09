@@ -25,6 +25,7 @@ chrono.workspace = true
 tonic.workspace = true
 prost.workspace = true
 prost-types.workspace = true
+async-nats.workspace = true
 common = { path = "../common" }
 models = { path = "../models" }
 proto = { path = "../proto" }
@@ -34,3 +35,6 @@ serde_json.workspace = true
 axum.workspace = true
 hyper = "0.14"
 tower.workspace = true
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
+testcontainers.workspace = true
