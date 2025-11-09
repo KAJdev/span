@@ -1,7 +1,8 @@
 use std::{collections::{HashMap, VecDeque}, sync::Arc};
 use tokio::sync::{RwLock, broadcast};
 use async_nats::Client;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
+use futures_util::StreamExt;
 
 const LOG_BUFFER_CAP: usize = 1000;
 

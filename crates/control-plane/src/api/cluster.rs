@@ -13,7 +13,7 @@ pub struct ClusterInfo {
 }
 
 pub async fn cluster_info(State(state): State<Arc<AppState>>) -> Json<ClusterInfo> {
-    let nodes = sqlx::query!("SELECT id, name, status FROM nodes WHERE status = 'healthy'")
+    let nodes = sqlx::query("SELECT id, name, status FROM nodes WHERE status = 'healthy'")
         .fetch_all(&state.db)
         .await
         .unwrap_or_default();
