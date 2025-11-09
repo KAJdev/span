@@ -116,3 +116,41 @@ async fn handle_ws(mut socket: WebSocket, state: SharedState, subject: String) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn append_and_buffer_works() {
+        let hub = LogHub::new();
+        let subject = "span.builds.test.logs";
+        hub.append_and_broadcast(subject, "line1".into()).await;
+        hub.append_and_broadcast(subject, "line2".into()).await;
+        let buf = hub.get_buffer(subject).await;
+        assert_eq!(buf, vec!["line1".to_string(), "line2".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn buffer_cap_is_enforced() {
+        let hub = LogHub::new();
+        let subject = "s";
+        for i in 0..(LOG_BUFFER_CAP + 5) {
+            hub.append_and_broadcast(subject, format!("l{i}")).await;
+        }
+        let buf = hub.get_buffer(subject).await;
+        assert_eq!(buf.len(), LOG_BUFFER_CAP);
+        assert_eq!(buf.first().unwrap(), "l5");
+        assert_eq!(buf.last().unwrap(), &format!("l{}", LOG_BUFFER_CAP + 4));
+    }
+
+    #[tokio::test]
+    async fn get_sender_is_cached_per_subject() {
+        let hub = LogHub::new();
+        let a1 = hub.get_sender("a").await;
+        let a2 = hub.get_sender("a").await;
+        assert!(a1.same_channel(&a2));
+        let b = hub.get_sender("b").await;
+        assert!(!a1.same_channel(&b));
+    }
+}
